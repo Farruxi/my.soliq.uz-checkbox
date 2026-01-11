@@ -1,0 +1,73 @@
+// ==UserScript==
+// @name         Soliq Faktura Checklist
+// @namespace    soliq-faktura-checklist
+// @version      1.0
+// @description  Checkbox checklist for entered fakturas
+// @match        https://my.soliq.uz/faktura/*
+// @grant        none
+// ==/UserScript==
+
+(function () {
+    'use strict';
+
+    const STORAGE_KEY = 'soliq_checked_fakturas';
+
+    function getSaved() {
+        return JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
+    }
+
+    function save(data) {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+    }
+
+    function addCheckboxes() {
+        const saved = getSaved();
+        const rows = document.querySelectorAll('table tbody tr');
+
+        rows.forEach(row => {
+            if (row.dataset.checkboxAdded) return;
+            row.dataset.checkboxAdded = 'true';
+
+            const cells = row.querySelectorAll('td');
+            if (cells.length < 5) return;
+
+            const invoiceCell = cells[4]; // "Номер и дата"
+            const invoiceId = invoiceCell.innerText.trim();
+
+            if (!invoiceId) return;
+
+            const checkbox = document.createElement('input');
+            checkbox.type = 'checkbox';
+            checkbox.style.transform = 'scale(0.9)';
+            checkbox.style.cursor = 'pointer';
+
+            if (saved[invoiceId]) {
+                checkbox.checked = true;
+                row.style.backgroundColor = '#e6fffa';
+            }
+
+            checkbox.addEventListener('change', () => {
+                const data = getSaved();
+                if (checkbox.checked) {
+                    data[invoiceId] = true;
+                    row.style.backgroundColor = '#e6fffa';
+                } else {
+                    delete data[invoiceId];
+                    row.style.backgroundColor = '';
+                }
+                save(data);
+            });
+
+            const firstCell = cells[0];
+            firstCell.prepend(checkbox);
+            firstCell.style.display = 'flex';
+            firstCell.style.alignItems = 'center';
+            firstCell.style.gap = '6px';
+        });
+    }
+
+    const observer = new MutationObserver(addCheckboxes);
+    observer.observe(document.body, { childList: true, subtree: true });
+
+    setTimeout(addCheckboxes, 1500);
+})();
