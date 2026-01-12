@@ -1,5 +1,5 @@
 # my.soliq.uz-checkbox
-my.soliq.uz da hisob fakturalarii yoniga checkbox qo'shish. Kod faqat Tempermonkey chrome extension orqali ishlaydi
+my.soliq.uz da hisob fakturalarii yoniga checkbox qo'shish. Kod faqat Tampermonkey chrome extension orqali ishlaydi
 
 >.txt bilan tugaydigan faylni ichida script joylashgan 
 
