@@ -6,3 +6,4 @@ my.soliq.uz da hisob fakturalarii yoniga checkbox qo'shish. Kod faqat Tampermonk
 
 
 <img width="1115" height="583" alt="image" src="https://github.com/user-attachments/assets/e6897bd1-c891-4c7f-a386-004dae4a6547" />
+<img width="1120" height="327" alt="image" src="https://github.com/user-attachments/assets/858b9f4d-f058-4191-932f-0de3d61e3af4" />
