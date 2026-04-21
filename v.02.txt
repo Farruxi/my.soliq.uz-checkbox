@@ -1,0 +1,175 @@
+// ==UserScript==
+// @name         Soliq Faktura Power Tools
+// @namespace    soliq-faktura-tools
+// @version      2.0
+// @description  Checkboxes + column highlighting + quick price-discount calculator
+// @match        https://my.soliq.uz/faktura/*
+// @grant        none
+// ==/UserScript==
+
+(function () {
+    'use strict';
+
+    /* ==========================
+       CHECKBOXES (unchanged)
+    ========================== */
+
+    const STORAGE_KEY = 'soliq_checked_fakturas';
+
+    function getSaved() {
+        return JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
+    }
+
+    function save(data) {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+    }
+
+    function addCheckboxes() {
+        const saved = getSaved();
+        const rows = document.querySelectorAll('table tbody tr');
+
+        rows.forEach(row => {
+            if (row.dataset.checkboxAdded) return;
+            row.dataset.checkboxAdded = 'true';
+
+            const cells = row.querySelectorAll('td');
+            if (cells.length < 5) return;
+
+            const invoiceCell = cells[4];
+            const invoiceId = invoiceCell.innerText.trim();
+            if (!invoiceId) return;
+
+            const checkbox = document.createElement('input');
+            checkbox.type = 'checkbox';
+
+            if (saved[invoiceId]) {
+                checkbox.checked = true;
+                row.style.backgroundColor = '#e6fffa';
+            }
+
+            checkbox.addEventListener('change', () => {
+                const data = getSaved();
+                if (checkbox.checked) {
+                    data[invoiceId] = true;
+                    row.style.backgroundColor = '#e6fffa';
+                } else {
+                    delete data[invoiceId];
+                    row.style.backgroundColor = '';
+                }
+                save(data);
+            });
+
+            const firstCell = cells[0];
+            firstCell.prepend(checkbox);
+            firstCell.style.display = 'flex';
+            firstCell.style.gap = '6px';
+        });
+    }
+
+    /* ==========================
+       COLUMN HIGHLIGHT TOGGLES
+    ========================== */
+
+    function addColumnToggles() {
+        const headerRow = document.querySelector('table thead tr');
+        if (!headerRow || headerRow.dataset.togglesAdded) return;
+
+        headerRow.dataset.togglesAdded = 'true';
+        const headers = headerRow.querySelectorAll('th');
+
+        headers.forEach((th, index) => {
+            const toggle = document.createElement('span');
+            toggle.textContent = '●';
+            toggle.style.cursor = 'pointer';
+            toggle.style.marginLeft = '6px';
+            toggle.style.color = '#bbb';
+
+            let active = false;
+
+            toggle.onclick = () => {
+                active = !active;
+                toggle.style.color = active ? '#facc15' : '#bbb';
+
+                document.querySelectorAll(`table tr`).forEach(tr => {
+                    const cell = tr.children[index];
+                    if (cell) {
+                        cell.style.backgroundColor = active ? '#fff7cc' : '';
+                    }
+                });
+            };
+
+            th.appendChild(toggle);
+        });
+    }
+
+    /* ==========================
+       QUICK CALCULATOR
+    ========================== */
+
+    let selectedNumbers = [];
+
+    function parseNumber(text) {
+        return parseFloat(text.replace(/\s/g, '').replace(',', '.'));
+    }
+
+    function showCalc(a, b) {
+        const discount = Math.abs(b);
+        const result = a - discount;
+
+        const box = document.createElement('div');
+        box.style.position = 'fixed';
+        box.style.top = '20px';
+        box.style.right = '20px';
+        box.style.background = '#111';
+        box.style.color = '#fff';
+        box.style.padding = '10px 14px';
+        box.style.borderRadius = '8px';
+        box.style.zIndex = '9999';
+        box.style.fontSize = '14px';
+
+        box.innerHTML = `
+            <div style="display:flex;justify-content:space-between;">
+                <strong>${a} − ${discount} = ${result}</strong>
+                <span style="cursor:pointer;margin-left:10px;">✕</span>
+            </div>
+            <button style="margin-top:8px;width:100%;">Copy</button>
+        `;
+
+        box.querySelector('span').onclick = () => box.remove();
+        box.querySelector('button').onclick = () => navigator.clipboard.writeText(result);
+
+        document.body.appendChild(box);
+    }
+
+    document.addEventListener('mouseup', () => {
+        const text = window.getSelection().toString().trim();
+        if (!text) return;
+
+        const num = parseNumber(text);
+        if (isNaN(num)) return;
+
+        selectedNumbers.push(num);
+
+        if (selectedNumbers.length === 2) {
+            showCalc(selectedNumbers[0], selectedNumbers[1]);
+            selectedNumbers = [];
+        }
+    });
+
+    /* ==========================
+       OBSERVER
+    ========================== */
+
+    const observer = new MutationObserver(() => {
+        addCheckboxes();
+        addColumnToggles();
+    });
+
+    observer.observe(document.body, { childList: true, subtree: true });
+
+    setTimeout(() => {
+        addCheckboxes();
+        addColumnToggles();
+    }, 1500);
+
+})();
