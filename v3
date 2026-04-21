@@ -1,0 +1,141 @@
+// ==UserScript==
+// @name         Soliq Faktura – Checkboxes + Column Highlight
+// @namespace    soliq-faktura-simple
+// @version      1.0
+// @description  Invoice checkboxes and Excel-like column highlighting
+// @match        https://my.soliq.uz/faktura/*
+// @grant        none
+// ==/UserScript==
+
+(function () {
+    'use strict';
+
+    /* ==========================
+       CHECKBOXES
+    ========================== */
+
+    const STORAGE_KEY = 'soliq_checked_fakturas';
+
+    function getSaved() {
+        return JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
+    }
+
+    function save(data) {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+    }
+
+    function addCheckboxes() {
+        const saved = getSaved();
+        const rows = document.querySelectorAll('table tbody tr');
+
+        rows.forEach(row => {
+            if (row.dataset.checkboxAdded) return;
+            row.dataset.checkboxAdded = 'true';
+
+            const cells = row.querySelectorAll('td');
+            if (cells.length < 5) return;
+
+            const invoiceId = cells[4].innerText.trim();
+            if (!invoiceId) return;
+
+            const checkbox = document.createElement('input');
+            checkbox.type = 'checkbox';
+
+            if (saved[invoiceId]) {
+                checkbox.checked = true;
+                row.style.backgroundColor = '#e6fffa';
+            }
+
+            checkbox.addEventListener('change', () => {
+                const data = getSaved();
+                if (checkbox.checked) {
+                    data[invoiceId] = true;
+                    row.style.backgroundColor = '#e6fffa';
+                } else {
+                    delete data[invoiceId];
+                    row.style.backgroundColor = '';
+                }
+                save(data);
+            });
+
+            const firstCell = cells[0];
+            firstCell.prepend(checkbox);
+            firstCell.style.display = 'flex';
+            firstCell.style.alignItems = 'center';
+            firstCell.style.gap = '6px';
+        });
+    }
+
+    /* ==========================
+       COLUMN HIGHLIGHTING
+    ========================== */
+
+    let activeColumnIndex = null;
+
+    function addColumnToggles() {
+        const headerRow = document.querySelector('table thead tr');
+        if (!headerRow || headerRow.dataset.highlightReady) return;
+
+        headerRow.dataset.highlightReady = 'true';
+
+        const headers = headerRow.querySelectorAll('th');
+
+        headers.forEach((th, index) => {
+            const toggle = document.createElement('span');
+            toggle.textContent = ' ●';
+            toggle.style.cursor = 'pointer';
+            toggle.style.color = '#bbb';
+            toggle.title = 'Highlight column';
+
+            toggle.addEventListener('click', () => {
+                // Clear all highlights
+                document.querySelectorAll('td, th').forEach(cell => {
+                    cell.style.backgroundColor = '';
+                });
+
+                // Reset all toggles
+                headers.forEach(h => {
+                    h.querySelectorAll('span').forEach(s => s.style.color = '#bbb');
+                });
+
+                // Turn OFF if same column clicked
+                if (activeColumnIndex === index) {
+                    activeColumnIndex = null;
+                    return;
+                }
+
+                // Activate new column
+                activeColumnIndex = index;
+                toggle.style.color = '#facc15';
+
+                document.querySelectorAll('table tr').forEach(tr => {
+                    if (tr.children[index]) {
+                        tr.children[index].style.backgroundColor = '#fff7cc';
+                    }
+                });
+            });
+
+            th.appendChild(toggle);
+        });
+    }
+
+    /* ==========================
+       OBSERVER
+    ========================== */
+
+    const observer = new MutationObserver(() => {
+        addCheckboxes();
+        addColumnToggles();
+    });
+
+    observer.observe(document.body, {
+        childList: true,
+        subtree: true
+    });
+
+    setTimeout(() => {
+        addCheckboxes();
+        addColumnToggles();
+    }, 1500);
+
+})();
