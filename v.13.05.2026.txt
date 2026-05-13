@@ -1,0 +1,274 @@
+// ==UserScript==
+// @name         Soliq Faktura Power Tools (Clean Header Toggle)
+// @namespace    soliq-faktura-tools
+// @version      2.5
+// @description  Checkboxes + column highlighting + fixed calculator + header select all
+// @match        https://my.soliq.uz/faktura/*
+// @grant        none
+// ==/UserScript==
+
+(function () {
+    'use strict';
+
+    /* ==========================
+       STORAGE
+    ========================== */
+
+    const STORAGE_KEY = 'soliq_checked_fakturas';
+
+    function getSaved() {
+        return JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
+    }
+
+    function save(data) {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+    }
+
+    /* ==========================
+       CHECKBOXES
+    ========================== */
+
+    function addCheckboxes() {
+        const saved = getSaved();
+        const rows = document.querySelectorAll('table tbody tr');
+
+        rows.forEach(row => {
+            if (row.dataset.checkboxAdded) return;
+            row.dataset.checkboxAdded = 'true';
+
+            const cells = row.querySelectorAll('td');
+            if (cells.length < 5) return;
+
+            const invoiceId = cells[4].innerText.trim();
+            if (!invoiceId) return;
+
+            const checkbox = document.createElement('input');
+            checkbox.type = 'checkbox';
+
+            if (saved[invoiceId]) {
+                checkbox.checked = true;
+                row.style.backgroundColor = '#e6fffa';
+            }
+
+            checkbox.addEventListener('change', () => {
+                const data = getSaved();
+
+                if (checkbox.checked) {
+                    data[invoiceId] = true;
+                    row.style.backgroundColor = '#e6fffa';
+                } else {
+                    delete data[invoiceId];
+                    row.style.backgroundColor = '';
+                }
+
+                save(data);
+                updateHeaderCheckbox();
+            });
+
+            cells[0].prepend(checkbox);
+            cells[0].style.display = 'flex';
+            cells[0].style.gap = '6px';
+        });
+
+        updateHeaderCheckbox();
+    }
+
+    /* ==========================
+       HEADER SELECT ALL CHECKBOX
+    ========================== */
+
+    function addSelectAllCheckbox() {
+        const headerRow = document.querySelector('table thead tr');
+        if (!headerRow || document.getElementById('selectAllCheckbox')) return;
+
+        const firstTh = headerRow.querySelector('th');
+        if (!firstTh) return;
+
+        const selectAll = document.createElement('input');
+        selectAll.type = 'checkbox';
+        selectAll.id = 'selectAllCheckbox';
+        selectAll.style.marginRight = '6px';
+        selectAll.style.cursor = 'pointer';
+
+        selectAll.addEventListener('change', () => {
+            const checkboxes = document.querySelectorAll('table tbody input[type="checkbox"]');
+            const data = getSaved();
+
+            checkboxes.forEach(cb => {
+                const row = cb.closest('tr');
+                const cells = row.querySelectorAll('td');
+                const invoiceId = cells[4]?.innerText.trim();
+
+                if (!invoiceId) return;
+
+                if (selectAll.checked) {
+                    cb.checked = true;
+                    data[invoiceId] = true;
+                    row.style.backgroundColor = '#e6fffa';
+                } else {
+                    cb.checked = false;
+                    delete data[invoiceId];
+                    row.style.backgroundColor = '';
+                }
+            });
+
+            save(data);
+        });
+
+        firstTh.prepend(selectAll);
+    }
+
+    function updateHeaderCheckbox() {
+        const selectAll = document.getElementById('selectAllCheckbox');
+        if (!selectAll) return;
+
+        const checkboxes = document.querySelectorAll('table tbody input[type="checkbox"]');
+        if (checkboxes.length === 0) return;
+
+        const allChecked = Array.from(checkboxes).every(cb => cb.checked);
+        selectAll.checked = allChecked;
+    }
+
+    /* ==========================
+       COLUMN HIGHLIGHT
+    ========================== */
+
+    function addColumnToggles() {
+        const headerRow = document.querySelector('table thead tr');
+        if (!headerRow || headerRow.dataset.togglesAdded) return;
+
+        headerRow.dataset.togglesAdded = 'true';
+
+        headerRow.querySelectorAll('th').forEach((th, index) => {
+            const toggle = document.createElement('span');
+            toggle.textContent = '●';
+            toggle.style.cursor = 'pointer';
+            toggle.style.marginLeft = '6px';
+            toggle.style.color = '#bbb';
+
+            let active = false;
+
+            toggle.onclick = () => {
+                active = !active;
+                toggle.style.color = active ? '#facc15' : '#bbb';
+
+                document.querySelectorAll('table tr').forEach(tr => {
+                    const cell = tr.children[index];
+                    if (cell) cell.style.backgroundColor = active ? '#fff7cc' : '';
+                });
+            };
+
+            th.appendChild(toggle);
+        });
+    }
+
+    /* ==========================
+       CALCULATOR
+    ========================== */
+
+    let selectedCells = [];
+    let calcBox = null;
+
+    function parseNumber(text) {
+        return parseFloat(
+            text
+                .replace(/\s/g, '')
+                .replace(/\.(?=\d{3})/g, '')
+                .replace(',', '.')
+        );
+    }
+
+    function clearSelection() {
+        selectedCells.forEach(item => {
+            item.cell.style.outline = '';
+        });
+        selectedCells = [];
+    }
+
+    function closeCalculator() {
+        if (calcBox) {
+            calcBox.remove();
+            calcBox = null;
+        }
+        clearSelection();
+    }
+
+    function showCalc(a, b) {
+        if (calcBox) calcBox.remove();
+
+        const result = a - Math.abs(b);
+
+        calcBox = document.createElement('div');
+        calcBox.style.position = 'fixed';
+        calcBox.style.top = '20px';
+        calcBox.style.right = '20px';
+        calcBox.style.background = '#111';
+        calcBox.style.color = '#fff';
+        calcBox.style.padding = '12px 14px';
+        calcBox.style.borderRadius = '10px';
+        calcBox.style.zIndex = '9999';
+        calcBox.style.minWidth = '220px';
+        calcBox.style.fontSize = '14px';
+
+        calcBox.innerHTML = `
+            <div style="display:flex;justify-content:space-between;align-items:center;">
+                <strong>${a} − ${Math.abs(b)} = ${result}</strong>
+                <span id="closeCalc" style="cursor:pointer;font-size:16px;">✕</span>
+            </div>
+            <button id="copyCalc"
+                style="margin-top:10px;width:100%;padding:6px;border-radius:6px;border:none;cursor:pointer;">
+                Copy result
+            </button>
+        `;
+
+        calcBox.querySelector('#copyCalc').onclick = () => {
+            navigator.clipboard.writeText(result);
+        };
+
+        calcBox.querySelector('#closeCalc').onclick = () => {
+            closeCalculator();
+        };
+
+        document.body.appendChild(calcBox);
+    }
+
+    document.addEventListener('click', (e) => {
+        const cell = e.target.closest('td');
+        if (!cell) return;
+
+        const num = parseNumber(cell.innerText.trim());
+        if (isNaN(num)) return;
+
+        if (selectedCells.length === 0) {
+            cell.style.outline = '2px solid #3b82f6';
+            selectedCells.push({ cell, num });
+        }
+        else if (selectedCells.length === 1) {
+            if (cell === selectedCells[0].cell) return;
+
+            cell.style.outline = '2px solid #f97316';
+            selectedCells.push({ cell, num });
+
+            showCalc(selectedCells[0].num, selectedCells[1].num);
+        }
+    });
+
+    /* ==========================
+       OBSERVER
+    ========================== */
+
+    const observer = new MutationObserver(() => {
+        addCheckboxes();
+        addColumnToggles();
+        addSelectAllCheckbox();
+    });
+
+    observer.observe(document.body, { childList: true, subtree: true });
+
+    setTimeout(() => {
+        addCheckboxes();
+        addColumnToggles();
+        addSelectAllCheckbox();
+    }, 1500);
+
+})();
